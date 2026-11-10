@@ -15,6 +15,9 @@ from ebrains_storage.repos import Repos
 from ebrains_storage.buckets import Buckets
 from ebrains_storage.file import BucketFile, File
 
+# How much of the body of an unexpected response goes into the message of the ClientHttpError.
+ERROR_BODY_LIMIT = 200
+
 
 class ClientBase(ABC):
     def __init__(self, username=None, password=None, token=None, env="") -> None:
@@ -63,7 +66,7 @@ class ClientBase(ABC):
         elif response.status_code == 401:
             raise Unauthorized(response.json()["error_description"])
         else:
-            raise ClientHttpError(response.json()["error_description"])
+            raise ClientHttpError(response.status_code, response.json()["error_description"], response)
 
     def get(self, *args, **kwargs):
         return self.send_request("GET", *args, **kwargs)
@@ -105,7 +108,9 @@ class ClientBase(ABC):
 
         if resp.status_code not in expected:
             msg = f"Expected {expected}, but got {resp.status_code}"
-            raise ClientHttpError(resp.status_code, msg)
+            if resp.text:
+                msg += f": {resp.text[:ERROR_BODY_LIMIT]}"
+            raise ClientHttpError(resp.status_code, msg, resp)
 
         return resp
 

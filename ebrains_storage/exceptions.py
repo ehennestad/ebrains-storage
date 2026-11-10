@@ -1,11 +1,16 @@
 class ClientHttpError(Exception):
     """This exception is raised if the returned http response is not as
-    expected"""
+    expected.
 
-    def __init__(self, code, message):
+    ``response`` is the :class:`requests.Response`, when there is one. Its
+    body often says why the request failed, which the status alone does not.
+    """
+
+    def __init__(self, code, message, response=None):
         super(ClientHttpError, self).__init__()
         self.code = code
         self.message = message
+        self.response = response
 
     def __str__(self):
         return "ClientHttpError[%s: %s]" % (self.code, self.message)

@@ -635,6 +635,27 @@ A `BucketApiClient`. `client.buckets` is the bucket manager (mirrors
 `client.repos` on the Drive side); `client.file` exposes a URL-resolution
 helper (see [URL Helper](#bucket_url_helper)).
 
+**Errors**
+
+A request that gets another status than the one expected raises
+`ClientHttpError`. Its `code` is the status, its `response` the
+`requests.Response`, and its message ends with the first 200 characters of
+the body, which often says why the request failed: the data-proxy answers
+401 both without a token and with an invalid one, and only the body tells
+the two apart.
+
+```python
+    from ebrains_storage.exceptions import ClientHttpError
+
+    try:
+        client.buckets.delete_bucket("my-bucket")
+    except ClientHttpError as e:
+        print(e.code, e.response.text)
+```
+
+Methods that list `Unauthorized` among their exceptions raise it instead for
+a 401, with the `ClientHttpError` as its `__context__`.
+
 ## <a id="bucket_bucket"></a> Bucket ##
 ### <a id="bucket_bucket_get"></a> Get Bucket ###
 **Request Parameters**

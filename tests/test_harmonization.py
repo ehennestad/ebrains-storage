@@ -38,6 +38,7 @@ class MockResp:
         self._payload = payload
         self.status_code = status_code
         self.headers = {}
+        self.text = json.dumps(payload)
 
     def json(self):
         return self._payload
