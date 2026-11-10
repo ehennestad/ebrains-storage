@@ -3,7 +3,7 @@ import os
 import warnings
 from typing import Iterable, Union
 import requests
-from ebrains_storage.exceptions import DoesNotExist, InvalidParameter, UpstreamAPIException
+from ebrains_storage.exceptions import DoesNotExist, InvalidParameter, OperationError, UpstreamAPIException
 from ebrains_storage.files import BucketDir, DataproxyFile
 from ebrains_storage.utils import (
     on_401_raise_unauthorized,
@@ -307,6 +307,17 @@ class Bucket(object):
         client so the call site is uniform across backends.
         """
         return self.client.buckets.delete_bucket(self.name)
+
+    def set_public(self, is_public: bool) -> None:
+        """Make this bucket public, or private again with ``is_public=False``.
+
+        Delegates to :meth:`ebrains_storage.buckets.Buckets.update_bucket` and
+        sets ``is_public`` from the data-proxy's answer. The data-proxy has no
+        such request for a dataset, so a dataset raises :exc:`OperationError`.
+        """
+        if self.target != "buckets":
+            raise OperationError(f"Only a collab bucket can be made public; {self.dataproxy_entity_name} is a dataset.")
+        self.is_public = self.client.buckets.update_bucket(self.name, is_public=is_public).is_public
 
     def is_readonly(self) -> bool:
         """Return ``True`` when the current credentials cannot write to this bucket.

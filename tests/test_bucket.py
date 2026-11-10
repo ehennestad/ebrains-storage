@@ -1,11 +1,15 @@
+import base64
 import json
+import time
 from contextlib import nullcontext
 import pytest
 import warnings
 from unittest.mock import patch, mock_open
 from unittest.mock import MagicMock
 from ebrains_storage.bucket import Bucket
-from ebrains_storage.exceptions import ClientHttpError, Unauthorized, InvalidParameter, UpstreamAPIException
+from ebrains_storage.buckets import Buckets
+from ebrains_storage.client import BucketApiClient
+from ebrains_storage.exceptions import ClientHttpError, Unauthorized, InvalidParameter, OperationError, UpstreamAPIException
 from io import StringIO, BytesIO, IOBase
 from itertools import product
 from tempfile import mkstemp
@@ -373,3 +377,62 @@ def test_multipart_upload_raises_on_missing_server_field(tmp_path, put_side_effe
     with ctx:
         with pytest.raises(UpstreamAPIException):
             bucket.multipart_upload(str(f), "dest/bad.bin")
+
+
+# The data-proxy's answer to an update of a bucket, with the fields of ContainerStatResponse in its OpenAPI document.
+public_bucket_stat = {
+    "name": "foo",
+    "objects_count": 12,
+    "bytes": 112233,
+    "last_modified": "2026-11-10T10:00:00",
+    "is_public": True,
+    "role": "administrator",
+    "is_initialized": True,
+}
+
+
+def test_update_bucket_sends_is_public_and_returns_the_updated_bucket():
+    client = MockClient()
+    client.put = MagicMock(return_value=MockHttpResp(public_bucket_stat))
+    bucket = Buckets(client).update_bucket("foo", is_public=True)
+    client.put.assert_called_once_with("/v1/buckets/foo", json={"is_public": True})
+    assert isinstance(bucket, Bucket)
+    assert (bucket.name, bucket.is_public, bucket.role, bucket.is_initialized) == ("foo", True, "administrator", True)
+
+
+def test_update_bucket_raises_for_another_status_than_200():
+    claims = base64.b64encode(json.dumps({"exp": time.time() + 3600}).encode()).decode().rstrip("=")
+    client = BucketApiClient(token=f"header.{claims}.signature")
+    client.session.request = MagicMock(return_value=MagicMock(status_code=403))
+    with pytest.raises(ClientHttpError):
+        client.buckets.update_bucket("foo", is_public=True)
+    method, url = client.session.request.call_args.args[:2]
+    assert (method, url) == ("PUT", "https://data-proxy.ebrains.eu/api/v1/buckets/foo")
+    assert client.session.request.call_args.kwargs["json"] == {"is_public": True}
+
+
+def test_update_bucket_raises_unauthorized_for_401():
+    client = MockClient()
+    client.put = MagicMock(side_effect=ClientHttpError(401, "foo-bar"))
+    with pytest.raises(Unauthorized):
+        Buckets(client).update_bucket("foo", is_public=True)
+
+
+@pytest.mark.parametrize("is_public", [True, False])
+def test_set_public_takes_is_public_from_the_answer(is_public):
+    client = MockClient()
+    client.buckets = MagicMock()
+    client.buckets.update_bucket.return_value = Bucket.from_json(client, {**public_bucket_stat, "is_public": is_public})
+    bucket = Bucket.from_json(client, {**bucket_json, "is_public": not is_public})
+    assert bucket.set_public(is_public) is None
+    client.buckets.update_bucket.assert_called_once_with("foo", is_public=is_public)
+    assert bucket.is_public is is_public
+
+
+def test_set_public_refuses_a_dataset():
+    client = MockClient()
+    client.buckets = MagicMock()
+    dataset = Bucket.from_json(client, bucket_json, target="datasets", dataset_id="d-1")
+    with pytest.raises(OperationError):
+        dataset.set_public(True)
+    client.buckets.update_bucket.assert_not_called()

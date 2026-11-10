@@ -98,6 +98,21 @@ class Buckets(object):
         """Alias for :meth:`create_bucket`."""
         return self.create_bucket(name, **kwargs)
 
+    @on_401_raise_unauthorized("401 response. Check that the token is valid and may change the bucket.")
+    def update_bucket(self, bucket_name: str, *, is_public: bool) -> Bucket:
+        """Make a bucket public, or private again.
+
+        Sends the data-proxy's ``PUT /v1/buckets/{bucket_name}``, whose only
+        setting is ``is_public``. A public bucket can be read without a token
+        (see :class:`ebrains_storage.client.BucketApiClient` without credentials).
+
+        :param bucket_name: name of the bucket.
+        :param is_public: ``True`` to make the bucket public, ``False`` to make it private.
+        :return: the bucket with the statistics the data-proxy answers with after the change.
+        """
+        resp = self.client.put(f"/v1/buckets/{bucket_name}", json={"is_public": is_public})
+        return Bucket.from_json(self.client, resp.json())
+
     @on_401_raise_unauthorized(
         "Failed. Note: Buckets.delete_bucket needs to have clb.drive:write as a part of scope."
     )

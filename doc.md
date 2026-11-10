@@ -47,6 +47,7 @@
         <li><a href="#bucket_bucket_list">List Buckets</a></li>
         <li><a href="#bucket_bucket_create">Create Bucket</a></li>
         <li><a href="#bucket_bucket_delete">Delete Bucket</a></li>
+        <li><a href="#bucket_bucket_set_public">Make Bucket Public</a></li>
         <li><a href="#bucket_bucket_is_readonly">Check Bucket Permission</a></li>
         <li><a href="#bucket_bucket_ls">List Bucket Entries (flat)</a></li>
     </ul>
@@ -754,6 +755,43 @@ None
 **Exceptions**
 
 * `Unauthorized` when the credentials cannot delete the bucket.
+
+### <a id="bucket_bucket_set_public"></a> Make Bucket Public ###
+
+**Request Parameters**
+
+* bucket_name
+* is_public (keyword-only; `True` to make the bucket public, `False` to
+  make it private again)
+
+**Sample Case**
+
+```python
+
+    from ebrains_storage import BucketApiClient
+    client = BucketApiClient(token="ey...")
+
+    # Two equivalent ways to make a bucket public:
+    bucket = client.buckets.update_bucket("name", is_public=True)   # manager-level
+    client.buckets.get_bucket("name").set_public(True)              # instance method on Bucket
+```
+
+`update_bucket` sends the data-proxy's `PUT /v1/buckets/{bucket_name}` with
+`{"is_public": ...}`, and returns the bucket with the statistics the
+data-proxy answers with. `Bucket.set_public()` sets the bucket's
+`is_public` from that answer. A public bucket can be read without a token
+(see [Get Client](#bucket_get_client)).
+
+**Return Type**
+
+`update_bucket`: a Bucket Object. `set_public`: None.
+
+**Exceptions**
+
+* `Unauthorized` when the data-proxy answers 401.
+* `ClientHttpError` for any other answer than 200.
+* `OperationError` from `set_public` on a dataset, which the data-proxy
+  cannot make public through this request.
 
 ### <a id="bucket_bucket_is_readonly"></a> Check Bucket Permission ###
 
